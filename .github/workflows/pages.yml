@@ -1,0 +1,92 @@
+name: Publish Training Dashboard
+
+on:
+  workflow_run:
+    workflows: ["Train RL Agent"]
+    types: [completed]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: github-pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Resolve training run
+        id: source
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EVENT_NAME: ${{ github.event_name }}
+          EVENT_RUN_ID: ${{ github.event.workflow_run.id }}
+        run: |
+          if [ "$EVENT_NAME" = "workflow_run" ]; then
+            RUN_ID="$EVENT_RUN_ID"
+          else
+            RUN_ID="$(gh run list \
+              --repo "$GITHUB_REPOSITORY" \
+              --workflow "Train RL Agent" \
+              --branch main \
+              --status success \
+              --limit 1 \
+              --json databaseId \
+              --jq '.[0].databaseId')"
+          fi
+          test -n "$RUN_ID"
+          echo "run_id=$RUN_ID" >> "$GITHUB_OUTPUT"
+          echo "run_url=https://github.com/$GITHUB_REPOSITORY/actions/runs/$RUN_ID" >> "$GITHUB_OUTPUT"
+
+      - name: Download training artifact
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_ID: ${{ steps.source.outputs.run_id }}
+        run: |
+          mkdir -p downloaded
+          gh run download "$RUN_ID" --repo "$GITHUB_REPOSITORY" --dir downloaded
+          find downloaded -maxdepth 3 -type f | sort
+
+      - name: Locate training result
+        id: result
+        run: |
+          METADATA="$(find downloaded -type f -name metadata.json -print -quit)"
+          test -n "$METADATA"
+          echo "dir=$(dirname "$METADATA")" >> "$GITHUB_OUTPUT"
+
+      - name: Build static dashboard
+        run: |
+          python web/build_pages.py \
+            --input "${{ steps.result.outputs.dir }}" \
+            --output site \
+            --run-url "${{ steps.source.outputs.run_url }}"
+          test -f site/index.html
+          test -f site/videos/00_random.mp4
+          test -f site/videos/04_100_percent.mp4
+
+      - name: Configure GitHub Pages
+        uses: actions/configure-pages@v5
+        with:
+          enablement: true
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v4
+        with:
+          path: site
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
