@@ -143,12 +143,15 @@ class ContinuousCartPoleEnv(gym.Env):
         self.state[:] = [x, x_dot, theta, theta_dot]
         self.steps += 1
 
+        # Balance alone is not enough: a controller that keeps the pole upright
+        # while slowly driving the cart to a rail end is still a bad controller.
+        # The cart-position term is therefore deliberately substantial.
         angle_scale = math.radians(15.0)
         cost = (
-            0.70 * (theta / angle_scale) ** 2
-            + 0.15 * (x / 1.2) ** 2
+            0.65 * (theta / angle_scale) ** 2
+            + 0.25 * (x / 1.0) ** 2
             + 0.05 * (theta_dot / 3.0) ** 2
-            + 0.03 * (x_dot / 2.0) ** 2
+            + 0.03 * (x_dot / 1.5) ** 2
             + 0.02 * (self.actual_force_n / p.max_force_n) ** 2
         )
         reward = float(1.0 - cost)
