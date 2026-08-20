@@ -1,6 +1,6 @@
 {
-  "deployment_outcome": "skipped",
-  "page_url": "",
+  "deployment_outcome": "success",
+  "page_url": "https://temesotejam.github.io/rl-cartpole-ppo/",
   "source_training_run_id": "32241611957",
   "source_training_run_url": "https://github.com/temesotejam/rl-cartpole-ppo/actions/runs/32241611957",
   "pages_workflow_run_id": "32241889853",
